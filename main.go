@@ -78,12 +78,7 @@ func (sv *SantaViewer) ImageWidget(x, y int) layout.Widget {
 			ox = (float32(d.Size.X) - scale*float32(imsize.X)) / 2
 			oy = (float32(d.Size.Y) - scale*float32(imsize.Y)) / 2
 		} else {
-			if sv.zoomLevel%2 == 0 {
-				scale = float32(math.Pow(2.0, float64(sv.zoomLevel/2)))
-			} else {
-				scale = float32(math.Pow(2.0, float64((sv.zoomLevel-1)/2)) *
-					math.Sqrt2)
-			}
+			scale = zoomLevelToFloat(sv.zoomLevel)
 
 			ox = (float32(d.Size.X)-scale*float32(imsize.X))/2 +
 				float32(x)
@@ -92,12 +87,20 @@ func (sv *SantaViewer) ImageWidget(x, y int) layout.Widget {
 		}
 
 		imOp := paint.NewImageOp(sv.image)
-		imOp.Filter = paint.FilterNearest
+		imOp.Filter = paint.FilterLinear
 		imOp.Add(gtx.Ops)
 		op.Affine(f32.Affine2D{}.Scale(f32.Pt(0, 0), f32.Pt(scale, scale)).Offset(f32.Pt(ox, oy))).Add(gtx.Ops)
 		paint.PaintOp{}.Add(gtx.Ops)
 
 		return layout.Dimensions{Size: gtx.Constraints.Max}
+	}
+}
+
+func zoomLevelToFloat(zl int) float32 {
+	if zl%2 == 0 {
+		return float32(math.Pow(2.0, float64(zl/2)))
+	} else {
+		return float32(math.Pow(2.0, float64((zl-1)/2)) * math.Sqrt2)
 	}
 }
 
@@ -188,6 +191,22 @@ func (sv *SantaViewer) ViewerWindow(window *app.Window) error {
 							continue
 						}
 						lastScroll = curTime
+
+						prevScale := zoomLevelToFloat(sv.zoomLevel)
+						curScale := zoomLevelToFloat(sv.zoomLevel - x.Scroll.Round().Y)
+						s := curScale/prevScale
+
+						// if O is a vector representing the offset and P
+						// is a vector representing the zoom focus, then the
+						// new offset is at P + s*(O-P).
+						cx := x.Position.X - float32(gtx.Constraints.Max.X)/2
+						cy := x.Position.Y - float32(gtx.Constraints.Max.Y)/2
+
+						sx := cx + s*(float32(sv.offsetX) - cx)
+						sy := cy + s*(float32(sv.offsetY) - cy)
+
+						sv.offsetX = int(sx)
+						sv.offsetY = int(sy)
 						sv.zoomLevel -= x.Scroll.Round().Y
 					}
 				}
